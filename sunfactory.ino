@@ -7,8 +7,8 @@
 // creates 'radio', 'display' and 'button' instances
 #include <heltec_unofficial.h>
 
-#define THERMISTOR_PIN_A 6          // Analog pin where the voltage divider is connected for Thermistor A
-#define THERMISTOR_PIN_B 7          // Analog pin where the voltage divider is connected for Thermistor B
+#define THERMISTOR_PIN_A 7          // Analog pin where the voltage divider is connected for Thermistor A
+#define THERMISTOR_PIN_B 6          // Analog pin where the voltage divider is connected for Thermistor B
 #define SERIES_RESISTOR 10000.0     // 10k resistor value (in ohms)
 #define NOMINAL_RESISTANCE 100000.0 // 100k thermistor at 25C
 #define NOMINAL_TEMPERATURE 25.0    // 25°C
@@ -31,6 +31,8 @@ float targetTemperature = targetTemperatures[targetIndex];
 void setup()
 {
   heltec_setup();
+
+  display.resetOrientation();
 
   pinMode(BUZZER_PIN, OUTPUT); // Buzzer
 
