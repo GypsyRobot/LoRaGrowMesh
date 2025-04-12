@@ -8,6 +8,11 @@
     "deque": "cpp",
     "string": "cpp",
     "unordered_map": "cpp",
-    "vector": "cpp"
+    "vector": "cpp",
+    "cstdint": "cpp",
+    "compare": "cpp",
+    "atomic": "cpp",
+    "random": "cpp",
+    "*.tcc": "cpp"
   }
 }

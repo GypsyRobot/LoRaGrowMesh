@@ -8,7 +8,8 @@
 #include <time.h>
 // #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
-// ###################### LORA ######################
+// ###################### LORA - START ######################
+
 // Pause between transmited packets in seconds.
 // Set to zero to only transmit a packet when pressing the user button
 // Will not exceed 1% duty cycle, even if you set a lower value.
@@ -33,15 +34,28 @@
 // transmissting without an antenna can damage your hardware.
 #define TRANSMIT_POWER 14
 
-String txdata;
-String rxdata;
+int16_t sensor1 = 0, sensor2 = 0, sensor3 = 0, sensor4 = 0, sensor5 = 0, sensor6 = 0;
+
+String txData;
+String rxData;
 volatile bool rxFlag = false;
 long counter = 0;
 uint64_t last_tx = 0;
 uint64_t tx_time;
 uint64_t minimum_pause;
 
-// ###################################################
+// Example: Assign parsed values to variables
+String receivedNodeId = "";
+String receivedMsgId = "";
+bool receivedConnected = false;
+int16_t receivedSensor1 = 0;
+int16_t receivedSensor2 = 0;
+int16_t receivedSensor3 = 0;
+int16_t receivedSensor4 = 0;
+int16_t receivedSensor5 = 0;
+int16_t receivedSensor6 = 0;
+
+// ####################### LORA - END ############################
 
 #define LOG_INTERVAL_MS 1000 // 60000 milliseconds = 1 minute
 
@@ -95,6 +109,8 @@ bool enableBeep = true;
 
 unsigned long lastSaveTime = 0;
 
+String nodeId = "";
+
 void setup()
 {
   heltec_setup();
@@ -115,6 +131,11 @@ void setup()
   RADIOLIB_OR_HALT(radio.setOutputPower(TRANSMIT_POWER));
   // Start receiving
   RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+
+  nodeId = getNodeId();
+  Serial.print("nodeId: ");
+  Serial.println(nodeId);
+  delay(5000);
 
   // ###################################################
 
@@ -169,6 +190,8 @@ void setup()
   connected = handleWifi();
 
   delay(1000); // Allow time for serial monitor to open
+
+  Serial.println("WIFI CONETECDRERK");
 }
 
 void loop()
@@ -176,6 +199,9 @@ void loop()
   yield();
   heltec_loop();
   yield();
+
+  Serial.println("Looping with IP: ");
+  Serial.println(WiFi.localIP());
 
   if (!SPIFFS.exists(filename))
   {
@@ -356,7 +382,7 @@ void loop()
       }
     }
 
-    Serial.println(timestamp);
+    // Serial.println(timestamp);
 
     yield();
     File file = SPIFFS.open(filename, FILE_APPEND);
@@ -373,8 +399,7 @@ void loop()
       file.printf("%s, %d, %d, %d,\n", timestamp, (int)thermistorTemperatureA, (int)thermistorTemperatureB, (int)lux);
       fileSize = file.size();
       // Send data via Lora
-      txdata = String(timestamp) + "," + String((int)thermistorTemperatureA) + "," + String((int)thermistorTemperatureB) + "," + String((int)lux);
-
+      buildLoraPackage();
       handleLoraTx();
     }
     catch (const std::exception &e)
@@ -386,8 +411,8 @@ void loop()
 
     availableMemory = SPIFFS.totalBytes() - SPIFFS.usedBytes();
     availablePercentage = (float)availableMemory / SPIFFS.totalBytes() * 100;
-    Serial.printf("File size: %.2f Kbytes\n", (int)fileSize / 1024);
-    Serial.printf("Available memory: %.2f Kbytes (%.2f%%)\n", availableMemory / 1024, availablePercentage);
+    // Serial.printf("File size: %.2f Kbytes\n", (int)fileSize / 1024);
+    // Serial.printf("Available memory: %.2f Kbytes (%.2f%%)\n", availableMemory / 1024, availablePercentage);
 
     yield();
   }
@@ -471,6 +496,24 @@ bool handleWifi()
   server.on("/disable-beep", HTTP_GET, handleDisableBeep);
   yield();
   server.begin();
+
+  Serial.println("HTTP server started");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("MAC address: ");
+  Serial.println(WiFi.macAddress());
+  Serial.println("SSID: ");
+  Serial.println(WiFi.SSID());
+  Serial.println("Signal strength: ");
+  Serial.println(WiFi.RSSI());
+  Serial.println("Gateway: ");
+  Serial.println(WiFi.gatewayIP());
+  Serial.println("Subnet mask: ");
+  Serial.println(WiFi.subnetMask());
+  Serial.println("DNS: ");
+  Serial.println(WiFi.dnsIP());
+  Serial.println("Hostname: ");
+  Serial.println(WiFi.getHostname());
 
   // Initialize NTP
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -572,13 +615,31 @@ void handleDisableBeep()
   server.send(303);
 }
 
+String getNodeId()
+{
+  uint64_t chipId = ESP.getEfuseMac(); // Get unique chip ID
+  Serial.print("Chip ID: ");
+  Serial.println(chipId, HEX);
+
+  uint16_t shortNodeId = (chipId & 0xFFFF) ^ ((chipId >> 16) & 0xFFFF) ^ ((chipId >> 32) & 0xFFFF) ^ ((chipId >> 48) & 0xFFFF);
+  char nodeIdStr[5];
+  snprintf(nodeIdStr, sizeof(nodeIdStr), "%04X", shortNodeId);
+  return String(nodeIdStr);
+}
+
 void handleLoraTx()
 {
-  radio.transmit(txdata.c_str());
-  radio.clearDio1Action();
+  radio.transmit(txData.c_str());
+  // Serial.print("Raw Lora Data: ");
+  // Serial.println("TX [%s]\n", txData.c_str());
+
+  // both.printf("TX [%s]\n", txData.c_str());
+  // Serial.print("Bytes: ");
+  // Serial.println(strlen(txData.c_str()));
+
   heltec_led(50); // 50% brightness is plenty for this LED
   tx_time = millis();
-  RADIOLIB(radio.transmit(String(counter++).c_str()));
+  // RADIOLIB(radio.transmit(String(counter++).c_str()));
   tx_time = millis() - tx_time;
   heltec_led(0);
   if (_radiolib_status == RADIOLIB_ERR_NONE)
@@ -590,11 +651,15 @@ void handleLoraTx()
   {
     both.printf("fail (%i)\n", _radiolib_status);
   }
+
+  radio.clearDio1Action();
+
   // Maximum 1% duty cycle
   minimum_pause = tx_time * 100;
   last_tx = millis();
   radio.setDio1Action(rx);
-  RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+  // RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+  radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF);
 }
 
 void handleLoraRx()
@@ -603,15 +668,39 @@ void handleLoraRx()
   if (rxFlag)
   {
     rxFlag = false;
-    radio.readData(rxdata);
-    if (_radiolib_status == RADIOLIB_ERR_NONE)
+    radio.readData(rxData);
+
+    if (_radiolib_status == RADIOLIB_ERR_NONE && rxData.length())
     {
-      yield();
-      // both.printf("RX [%s]\n", rxdata.c_str());
+      parseLoraPackage();
+
+      // Filter out own packages sent via lora net
+      bool ownPackage = receivedNodeId.equals(nodeId);
+      if (!ownPackage)
+      {
+        // Retransmit the received package
+        both.printf("RX [%s]\n", rxData.c_str());
+        txData = rxData;
+        handleLoraTx();
+      }
+      // else
+      // {
+      //   Serial.println("Own Package");
+      //   both.printf("RX own [%s]\n", rxData.c_str());
+      // }
+
+      // both.printf("RX [%s]\n", rxData.c_str());
+      // heltec_delay(1000);
       // both.printf("  RSSI: %.2f dBm\n", radio.getRSSI());
       // both.printf("  SNR: %.2f dB\n", radio.getSNR());
+      // Serial.print("Received message: ");
+      // Serial.println(rxData.c_str());
+      // Serial.print("Bytes: ");
+      // Serial.println(strlen(rxData.c_str()));
     }
-    RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+
+    // RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+    radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF);
   }
 }
 
@@ -619,4 +708,57 @@ void handleLoraRx()
 void rx()
 {
   rxFlag = true;
+}
+
+void buildLoraPackage()
+{
+  // TODO: wrap numerical values into a pair of bytes to save string space (12-04-2025 - EVERTON)
+
+  // Generate a random 8-byte UUID
+  uint64_t uuid = esp_random();
+  // Serial.println(uuid, HEX);
+  char uuidStr[5];
+  snprintf(uuidStr, sizeof(uuidStr), "%04llX", uuid);
+  String msgId = String(uuidStr);
+
+  // Default Package Format (expected less than 50 bytes)
+  //  nodeId,msgId,connected,sensor1,sensor2,sensor3,sensor4,sensor5,sensor6
+  // Build the package to send
+  String package = nodeId + "," + String(msgId) + "," + String(connected) + "," + String(sensor1) + "," + String(sensor2) + "," + String(sensor3) + "," + String(sensor4) + "," + String(sensor5) + "," + String(sensor6);
+
+  txData = package;
+}
+
+void parseLoraPackage()
+{
+
+  // Default Package Format (expected less than 50 bytes)
+  //  nodeId,msgId,connected,sensor1,sensor2,sensor3,sensor4,sensor5,sensor6
+
+  // Split rxData by commas
+  int index = 0;
+  String parsedData = rxData;
+  String tokens[9]; // Assuming there are 6 fields in the package
+  while (parsedData.length() > 0 && index < 9)
+  {
+    int delimiterIndex = parsedData.indexOf(',');
+    if (delimiterIndex == -1)
+    {
+      tokens[index++] = parsedData; // Last token
+      break;
+    }
+    tokens[index++] = parsedData.substring(0, delimiterIndex);
+    parsedData = parsedData.substring(delimiterIndex + 1);
+  }
+
+  // Example: Assign parsed values to variables
+  receivedNodeId = tokens[0];
+  receivedMsgId = tokens[1];
+  receivedConnected = tokens[2].toInt();
+  receivedSensor1 = tokens[3].toInt();
+  receivedSensor2 = tokens[4].toInt();
+  receivedSensor3 = tokens[5].toInt();
+  receivedSensor4 = tokens[6].toInt();
+  receivedSensor5 = tokens[7].toInt();
+  receivedSensor6 = tokens[8].toInt();
 }

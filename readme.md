@@ -28,10 +28,13 @@ Roadmap:
 - DONE - certify that it handles flash overflow correctly
 - DONE - enable or disable beep via webserver
 - DONE - lora send and receive
-- lora ssid per module
+- DONE - lora ssid per module
+- DONE - use mac address as ssid
 - lora replicate messages and save to database with sender id
 - dht
 - generic hardware modules
 - fine tune lux measurements
+- more tests to bulletproof flash memory overflow
 - maybe - telegram integration
 - refactor
+- wrap sensors values into fixed lenght bytes to optimize lora sending reliability

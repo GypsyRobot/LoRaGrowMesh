@@ -28,9 +28,14 @@ Roadmap:
 - DONE - clear flash manualy
 - DONE - certify that it handles flash overflow correctly
 - DONE - enable or disable beep via webserver
-- fine tune lux measurements
-- lora
+- DONE - lora send and receive
+- DONE - lora ssid per module
+- DONE - use mac address as ssid
+- lora replicate messages and save to database with sender id
 - dht
 - generic hardware modules
-- telegram real time monitoring maybe
+- fine tune lux measurements
+- more tests to bulletproof flash memory overflow
+- maybe - telegram integration
 - refactor
+- wrap sensors values into fixed lenght bytes to optimize lora sending reliability
