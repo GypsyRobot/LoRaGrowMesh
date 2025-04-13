@@ -114,6 +114,7 @@ bool enableBeep = true;
 unsigned long lastSaveTime = 0;
 
 String nodeId = "";
+String msgId = "";
 
 void setup()
 {
@@ -167,7 +168,7 @@ void setup()
     delay(1000);
     if (file)
     {
-      file.println("Timestamp, Temperature A, Temperature B, Lux"); // CSV headers
+      file.println("Timestamp,nodeId,msgId,connected,sensor1,sensor2,sensor3,sensor4,sensor5,sensor6"); // CSV headers
       file.close();
     }
   }
@@ -210,7 +211,7 @@ void loop()
     delay(1000);
     if (file)
     {
-      file.println("Timestamp, Temperature A, Temperature B, Lux"); // CSV headers
+      file.println("Timestamp,nodeId,msgId,connected,sensor1,sensor2,sensor3,sensor4,sensor5,sensor6"); // CSV headers
       file.close();
     }
     delay(1000);
@@ -453,10 +454,12 @@ void handleWifi()
     if (!wm.autoConnect(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str()))
     {
       Serial.println("Failed to connect to WiFi. Starting AP mode...");
+      connected = false;
     }
     else
     {
       Serial.println("Connected to WiFi network.");
+      connected = true;
     }
   }
   else
@@ -522,16 +525,30 @@ void handleRoot()
 {
   String html = "<html><head><meta http-equiv='refresh' content='" + String(10) + "'></head>"
                                                                                   "<body style='background-color:#ffcc00; text-align:center;font-family:Arial;'><h1>SUNFACTORY</h1>"
-                                                                                  "<table border='1' style='margin-left:auto; margin-right:auto; text-align:center;'>"
-                                                                                  "<tr><th>Timestamp</th><th>Temperature A</th><th>Temperature B</th><th>Lux</th></tr>";
-  if (timestamp == nullptr || strlen(timestamp) == 0)
-  {
-    html += "<tr><td><a href='/'wait</a></td><td>" + String((int)thermistorTemperatureA) + " C</td><td>" + String((int)thermistorTemperatureB) + " C</td><td>" + String((int)lux) + " lm</td></tr>";
-  }
-  else
-  {
-    html += "<tr><td>" + String(timestamp) + " </td><td>" + String((int)thermistorTemperatureA) + " C</td><td>" + String((int)thermistorTemperatureB) + " C</td><td>" + String((int)lux) + " lm</td></tr>";
-  }
+                                                                                  "<table border='1' style='margin-left:auto; margin-right:auto; text-align:center;'>";
+  html += "<tr><th>Timestamp</th><th>Node ID</th><th>Message ID</th><th>Connected</th><th>Sensor 1</th><th>Sensor 2</th><th>Sensor 3</th><th>Sensor 4</th><th>Sensor 5</th><th>Sensor 6</th></tr>";
+  html += "<tr><td>" + String(timestamp) + "</td>";
+  html += "<td>" + nodeId + "</td>";
+  html += "<td>" + msgId + "</td>";
+  html += "<td>" + String(connected) + "</td>";
+  html += "<td>" + String(sensor1) + "</td>";
+  html += "<td>" + String(sensor2) + "</td>";
+  html += "<td>" + String(sensor3) + "</td>";
+  html += "<td>" + String(sensor4) + "</td>";
+  html += "<td>" + String(sensor5) + "</td>";
+  html += "<td>" + String(sensor6) + "</td></tr>";
+  "<table border='1' style='margin-left:auto; margin-right:auto; text-align:center;'>";
+  html += "<tr><th>Received Package</th><th>Node ID</th><th>Message ID</th><th>Connected</th><th>Sensor 1</th><th>Sensor 2</th><th>Sensor 3</th><th>Sensor 4</th><th>Sensor 5</th><th>Sensor 6</th></tr>";
+  html += "<tr><td>" + String(timestamp) + "</td>";
+  html += "<td>" + receivedNodeId + "</td>";
+  html += "<td>" + receivedMsgId + "</td>";
+  html += "<td>" + String(receivedConnected) + "</td>";
+  html += "<td>" + String(receivedSensor1) + "</td>";
+  html += "<td>" + String(receivedSensor2) + "</td>";
+  html += "<td>" + String(receivedSensor3) + "</td>";
+  html += "<td>" + String(receivedSensor4) + "</td>";
+  html += "<td>" + String(receivedSensor5) + "</td>";
+
   html += "</table><p><a href='/download'>Download LOG</a></p>";
   html += "<p>File size: " + String(fileSize / 1024) + " Kbytes</p>";
   html += "<p>Available memory: " + String(availableMemory / 1024) + " Kbytes (" + String(availablePercentage, 2) + "%)</p>";
@@ -569,10 +586,32 @@ void handleDownload()
 void handleGetValues()
 {
   String json = "{";
+  json += "\"ownValues\":{";
   json += "\"timestamp\":\"" + String(timestamp) + "\",";
-  json += "\"temperatureA\":" + String((int)thermistorTemperatureA) + ",";
-  json += "\"temperatureB\":" + String((int)thermistorTemperatureB) + ",";
-  json += "\"lux\":" + String((int)lux);
+  json += "\"nodeId\":\"" + nodeId + "\",";
+  json += "\"msgId\":\"" + msgId + "\",";
+  json += "\"connected\":" + String(connected) + ",";
+  json += "\"sensor1\":" + String(sensor1) + ",";
+  json += "\"sensor2\":" + String(sensor2) + ",";
+  json += "\"sensor3\":" + String(sensor3) + ",";
+  json += "\"sensor4\":" + String(sensor4) + ",";
+  json += "\"sensor5\":" + String(sensor5) + ",";
+  json += "\"sensor6\":" + String(sensor6);
+  json += "},";
+
+  json += "\"receivedValues\":{";
+  json += "\"timestamp\":\"" + String(timestamp) + "\",";
+  json += "\"nodeId\":\"" + receivedNodeId + "\",";
+  json += "\"msgId\":\"" + receivedMsgId + "\",";
+  json += "\"connected\":" + String(receivedConnected) + ",";
+  json += "\"sensor1\":" + String(receivedSensor1) + ",";
+  json += "\"sensor2\":" + String(receivedSensor2) + ",";
+  json += "\"sensor3\":" + String(receivedSensor3) + ",";
+  json += "\"sensor4\":" + String(receivedSensor4) + ",";
+  json += "\"sensor5\":" + String(receivedSensor5) + ",";
+  json += "\"sensor6\":" + String(receivedSensor6);
+  json += "}";
+
   json += "}";
 
   server.send(200, "application/json", json);
@@ -703,7 +742,7 @@ void buildLoraPackage()
   // Serial.println(uuid, HEX);
   char uuidStr[5];
   snprintf(uuidStr, sizeof(uuidStr), "%04llX", uuid);
-  String msgId = String(uuidStr);
+  msgId = String(uuidStr);
 
   // Default Package Format (expected less than 50 bytes)
   //  nodeId,msgId,connected,sensor1,sensor2,sensor3,sensor4,sensor5,sensor6

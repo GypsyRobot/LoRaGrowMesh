@@ -30,7 +30,9 @@ Roadmap:
 - DONE - lora send and receive
 - DONE - lora ssid per module
 - DONE - use mac address as ssid
-- lora replicate messages and save to database with sender id
+- DONE - lora replicate messages and save to database with sender id
+- test sunfactory mesh lora protocol
+- put request values from lora nodes to server database to be created
 - dht
 - generic hardware modules
 - fine tune lux measurements
