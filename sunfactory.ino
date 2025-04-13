@@ -71,7 +71,7 @@ char buffer[64]; // Buffer to store formatted string
 
 WiFiManager wm;
 
-WebServer server(80); // Create a web server on port 80
+WebServer server(8080); // Create a web server on port 80
 
 // NTP server settings
 const char *ntpServer = "pool.ntp.org";
@@ -182,11 +182,11 @@ void setup()
 
   yield();
 
-  connected = handleWifi();
+  handleWifi();
 
-  delay(1000); // Allow time for serial monitor to open
+  delay(1000);
 
-  Serial.println("WIFI CONETECDRERK");
+  startHttpServer();
 }
 
 void loop()
@@ -195,17 +195,11 @@ void loop()
   heltec_loop();
   yield();
 
-  // Serial.print(WiFi.getMode());
-  // Serial.print(" ");
-  // Serial.print(WiFi.status());
-  // Serial.print(" ");
-  // Serial.print(WiFi.localIP());
-  // Serial.print(" ");
-  // Serial.print(WiFi.SSID());
-  // Serial.println(" ");
+  // keep AP Portal Running
+  wm.process();
+  server.handleClient(); // Handle client requests
 
-  // Serial.println("Looping with IP: ");
-  // Serial.println(WiFi.localIP());
+  // Serial.println("Connected: " + String(connected));
 
   if (!SPIFFS.exists(filename))
   {
@@ -227,6 +221,7 @@ void loop()
 
   if (button.isSingleClick())
   {
+    Serial.println("Button pressed, changing target temperature...");
     targetIndex = (targetIndex + 1) % (sizeof(targetTemperatures) / sizeof(targetTemperatures[0])); // Cycle through targetTemperatures array
 
     // LED
@@ -367,19 +362,15 @@ void loop()
     lastSaveTime = currentTime;
     yield();
 
-    // Get current time from WiFi network
     // Generate a simple timestamp and dummy value
     snprintf(timestamp, sizeof(timestamp), "%lu", millis() / 1000);
 
     if (connected)
     {
+      // Get current time from WiFi network
       time_t now;
       struct tm timeinfo;
-      if (!getLocalTime(&timeinfo))
-      {
-        Serial.println("Failed to obtain time");
-      }
-      else
+      if (getLocalTime(&timeinfo))
       {
         time(&now);
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
@@ -429,140 +420,162 @@ void loop()
     fileSize = 0;
   }
 
+  sensor1 = (int)thermistorTemperatureA;
+  sensor2 = (int)thermistorTemperatureB;
+  sensor3 = (int)lux;
+
   handleLoraRx();
 
-  server.handleClient(); // Handle client requests
-
-  heltec_delay(1000);
+  heltec_delay(100);
 }
 
-bool handleWifi()
+String getNodeId()
+{
+  uint64_t chipId = ESP.getEfuseMac(); // Get unique chip ID
+  Serial.print("Chip ID: ");
+  Serial.println(chipId, HEX);
+
+  uint16_t shortNodeId = (chipId & 0xFFFF) ^ ((chipId >> 16) & 0xFFFF) ^ ((chipId >> 32) & 0xFFFF) ^ ((chipId >> 48) & 0xFFFF);
+  char nodeIdStr[5];
+  snprintf(nodeIdStr, sizeof(nodeIdStr), "%04X", shortNodeId);
+  return String(nodeIdStr);
+}
+
+void handleWifi()
 {
 
-  WiFi.mode(WIFI_STA);
+  wm.setTitle("");
 
-  wm.setTimeout(120); // 2 minutes
+  // Create a menu list
+  std::vector<const char *> menu = {"wifi", "exit"}; // You can add/remove these
 
-  // Check if the user presses the button to skip WiFi connection
+  // Apply the custom menu
+  wm.setMenu(menu);
+
+  //
+  // WiFi.mode(WIFI_STA);
+
+  // wm.setTimeout(20);                 // 3 minutes before timeout on trying to automatically connect
+  wm.setConfigPortalBlocking(false); // Set to false to allow non-blocking mode
+
+  // wm.setCustomHeadElement("<style>html{filter: invert(100%); -webkit-filter: invert(100%);}</style>");
+  wm.setCustomHeadElement("<style>.custom-btn{padding:10px 20px;background:#ffcc00;color:white;border:none;border-radius:5px;text-decoration:none;display:inline-block;}</style><a href='http://192.168.4.1:8080/raw' class='custom-btn'>Raw Data</a><a href='http://192.168.4.1:8080/' class='custom-btn'>Dashboard</a>");
+  // wm.setCustomHeadElement("<button onclick=\"alert('Popup shown!')\">SHOW POPUP</button>");
+  // wm.setCustomHeadElement("<style>html{filter: invert(100%); -webkit-filter: invert(100%);}</style>");
+  // WiFiManagerParameter custom_text("<p>This is just a text paragraph</p>");
+  // wm.addParameter(&custom_text);
+
+  // Give user the option to press button to start WIFI AP Mode before timeout
   unsigned long startAttemptTime = millis();
-
-  display.clear();
-  display.setFont(ArialMT_Plain_16);
-  display.drawStringf(4, 4, buffer, "SSID: %s", WIFI_SSID);
-  display.drawStringf(4, 24, buffer, "PASS: %s", WIFI_PASS);
-  display.drawString(4, 44, "Press to Skip");
-  display.display();
-
   while (millis() - startAttemptTime < WIFI_TIMEOUT_MS)
   {
+
+    yield();
+    heltec_loop();
+    yield();
+
+    int secondsLeft = (WIFI_TIMEOUT_MS - (millis() - startAttemptTime)) / 1000;
+    display.clear();
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(4, 4, "Press button to ");
+    display.drawString(4, 24, "Create Wifi AP");
+    display.drawStringf(4, 44, buffer, "Timeout in: %d s", secondsLeft);
+    display.display();
+
     if (button.isSingleClick())
     {
-      Serial.println("WiFi skipped by user.");
+      // LED
+      for (int n = 0; n <= 10; n++)
+      {
+        heltec_led(n);
+        delay(5);
+      }
+      for (int n = 10; n >= 0; n--)
+      {
+        heltec_led(n);
+        delay(5);
+      }
+
+      Serial.println("Button pressed, starting AP mode...");
+      // Show AP mode on display
       display.clear();
-      display.drawString(0, 0, "WiFi Skipped");
+      display.setFont(ArialMT_Plain_16);
+      display.drawStringf(4, 4, buffer, "%s_%s", WIFI_SSID, nodeId.c_str());
+      display.drawStringf(4, 24, buffer, "PASS: %s", WIFI_PASS);
+      display.drawStringf(4, 44, buffer, "IP: %s", "192.168.4.1");
       display.display();
-      delay(2000);
-      return false;
+
+      // Start the access point
+      wm.startConfigPortal((String(WIFI_SSID) + "_" + nodeId).c_str(), WIFI_PASS);
+      Serial.println("AP mode started");
     }
     delay(100);
   }
 
-  // Try connecting to saved WiFi, or start AP for setup
-  if (wm.autoConnect(WIFI_SSID, WIFI_PASS))
+  if (WiFi.status() != WL_CONNECTED)
   {
-    Serial.println("Connected to WiFi");
-    connected = true;
-  }
-  else
-  {
-    connected = false;
-    Serial.println("Failed to connect, starting AP");
-    // Start the access point
-    if (wm.startConfigPortal(WIFI_SSID, WIFI_PASS))
+    wm.setConnectTimeout(10); // Set timeout to 10 seconds
+    // if user didnt press the button, try to connect to the saved WiFi network
+    if (wm.autoConnect((String(WIFI_SSID) + "_" + nodeId).c_str(), WIFI_PASS))
     {
-      Serial.println("WiFi connected. Redirecting...");
-      server.sendHeader("Location", "/"); // Redirect to the root page
-      server.send(303);
+      display.clear();
+      display.drawString(0, 0, "  oo WIFI ON oo");
+      display.drawStringf(0, 16, buffer, "IP: %s", WiFi.localIP().toString().c_str());
+      display.display();
+      Serial.println("Connected to WiFi!");
+      Serial.println(WiFi.localIP());
+      connected = true;
+      delay(5000);
     }
     else
     {
-      Serial.println("Failed to connect via portal.");
-    }
-
-    display.setFont(ArialMT_Plain_16);
-    display.drawStringf(4, 4, buffer, WIFI_SSID);
-    display.drawStringf(4, 24, buffer, WIFI_PASS);
-    display.drawString(4, 44, "Press to Skip");
-    display.display();
-  }
-
-  char buffer[64]; // Buffer to store formatted string
-  display.clear();
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 0, "WiFi Connecting...");
-  display.display();
-
-  startAttemptTime = millis();
-
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    if (millis() - startAttemptTime >= WIFI_TIMEOUT_MS)
-    {
       display.clear();
-      display.drawString(0, 0, "WiFi Failed");
+      display.drawString(4, 4, "  xx NO WIFI xx");
       display.display();
-
-      return false;
+      connected = false;
+      delay(5000);
     }
-    delay(500);
-    display.drawString(0, 16, ".");
-    display.display();
-  }
-
-  display.clear();
-  display.drawString(0, 0, "WiFi Works");
-  display.drawStringf(0, 16, buffer, "IP: %s", WiFi.localIP().toString().c_str());
-  display.display();
-  Serial.println("Connected to WiFi!");
-  Serial.println(WiFi.localIP());
-  delay(5000);
-
-  if (connected)
-  {
-    // Start the server
-    server.on("/", HTTP_GET, handleRoot);             // Handle root request
-    server.on("/download", HTTP_GET, handleDownload); // Handle download request
-    server.on("/raw", HTTP_GET, handleGetValues);     // Handle getValues request
-    server.on("/wipe", HTTP_GET, handleWipeFile);     // Handle wipeFile request
-    server.on("/enable-beep", HTTP_GET, handleEnableBeep);
-    server.begin(80);
-    Serial.println("HTTP server started successfully.");
-
-    yield();
-    heltec_delay(1000);
-
-    Serial.println("HTTP server started");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-    Serial.println("MAC address: ");
-    Serial.println(WiFi.macAddress());
-    Serial.println("SSID: ");
-    Serial.println(WiFi.SSID());
-    Serial.println("Hostname: ");
-    Serial.println(WiFi.getHostname());
   }
   else
   {
-    Serial.println("Server not initialized.");
-    delay(2000);
+    display.clear();
+    display.drawString(0, 0, "  oo WIFI ON oo");
+    display.drawStringf(0, 16, buffer, "IP: %s", WiFi.localIP().toString().c_str());
+    display.display();
+    Serial.println("Connected to WiFi!");
+    Serial.println(WiFi.localIP());
+    connected = true;
+    delay(5000);
   }
+}
+
+void startHttpServer()
+{
+  // Start the server
+  server.on("/", HTTP_GET, handleRoot);             // Handle root request
+  server.on("/download", HTTP_GET, handleDownload); // Handle download request
+  server.on("/raw", HTTP_GET, handleGetValues);     // Handle getValues request
+  server.on("/wipe", HTTP_GET, handleWipeFile);     // Handle wipeFile request
+  server.on("/enable-beep", HTTP_GET, handleEnableBeep);
+  server.begin();
+  Serial.println("HTTP server started successfully.");
+
+  yield();
+  heltec_delay(1000);
+
+  Serial.println("HTTP server started");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("MAC address: ");
+  Serial.println(WiFi.macAddress());
+  Serial.println("SSID: ");
+  Serial.println(WiFi.SSID());
+  Serial.println("Hostname: ");
+  Serial.println(WiFi.getHostname());
 
   // Initialize NTP
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-
-  return true;
 }
-
 // Handle the root URL
 void handleRoot()
 {
@@ -655,18 +668,6 @@ void handleDisableBeep()
   enableBeep = false;
   server.sendHeader("Location", "/");
   server.send(303);
-}
-
-String getNodeId()
-{
-  uint64_t chipId = ESP.getEfuseMac(); // Get unique chip ID
-  Serial.print("Chip ID: ");
-  Serial.println(chipId, HEX);
-
-  uint16_t shortNodeId = (chipId & 0xFFFF) ^ ((chipId >> 16) & 0xFFFF) ^ ((chipId >> 32) & 0xFFFF) ^ ((chipId >> 48) & 0xFFFF);
-  char nodeIdStr[5];
-  snprintf(nodeIdStr, sizeof(nodeIdStr), "%04X", shortNodeId);
-  return String(nodeIdStr);
 }
 
 void handleLoraTx()
@@ -767,6 +768,8 @@ void buildLoraPackage()
   //  nodeId,msgId,connected,sensor1,sensor2,sensor3,sensor4,sensor5,sensor6
   // Build the package to send
   String package = nodeId + "," + String(msgId) + "," + String(connected) + "," + String(sensor1) + "," + String(sensor2) + "," + String(sensor3) + "," + String(sensor4) + "," + String(sensor5) + "," + String(sensor6);
+
+  Serial.println(package);
 
   txData = package;
 }
