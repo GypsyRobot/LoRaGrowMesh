@@ -63,7 +63,7 @@ int16_t receivedSensor6 = 0;
 #define WIFI_TIMEOUT_MS 10000 // 10000 milliseconds = 10 seconds
 
 #define WIFI_SSID "sunfactory"
-#define WIFI_PASS "sunfactory"
+// #define WIFI_PASS "sunfactory"
 
 const char *filename = "/data.csv"; // File path in SPIFFS
 
@@ -444,109 +444,50 @@ String getNodeId()
 void handleWifi()
 {
 
-  wm.setTitle("");
-
-  // Create a menu list
-  std::vector<const char *> menu = {"wifi", "exit"}; // You can add/remove these
-
-  // Apply the custom menu
-  wm.setMenu(menu);
-
-  //
-  // WiFi.mode(WIFI_STA);
-
-  // wm.setTimeout(20);                 // 3 minutes before timeout on trying to automatically connect
-  wm.setConfigPortalBlocking(false); // Set to false to allow non-blocking mode
-
-  // wm.setCustomHeadElement("<style>html{filter: invert(100%); -webkit-filter: invert(100%);}</style>");
-  wm.setCustomHeadElement("<style>.custom-btn{padding:10px 20px;background:#ffcc00;color:white;border:none;border-radius:5px;text-decoration:none;display:inline-block;}</style><a href='http://192.168.4.1:8080/raw' class='custom-btn'>Raw Data</a><a href='http://192.168.4.1:8080/' class='custom-btn'>Dashboard</a>");
-  // wm.setCustomHeadElement("<button onclick=\"alert('Popup shown!')\">SHOW POPUP</button>");
-  // wm.setCustomHeadElement("<style>html{filter: invert(100%); -webkit-filter: invert(100%);}</style>");
-  // WiFiManagerParameter custom_text("<p>This is just a text paragraph</p>");
-  // wm.addParameter(&custom_text);
-
-  // Give user the option to press button to start WIFI AP Mode before timeout
-  unsigned long startAttemptTime = millis();
-  while (millis() - startAttemptTime < WIFI_TIMEOUT_MS)
+  WiFi.mode(WIFI_AP_STA);   // Enable both Station and Access Point mode
+  wm.setConnectTimeout(10); // Set connection timeout to 10 seconds
+  // Print stored WiFi SSID and password
+  if (wm.getWiFiSSID().length() > 0 && wm.getWiFiPass().length() > 0)
   {
-
-    yield();
-    heltec_loop();
-    yield();
-
-    int secondsLeft = (WIFI_TIMEOUT_MS - (millis() - startAttemptTime)) / 1000;
-    display.clear();
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(4, 4, "Press button to ");
-    display.drawString(4, 24, "Create Wifi AP");
-    display.drawStringf(4, 44, buffer, "Timeout in: %d s", secondsLeft);
-    display.display();
-
-    if (button.isSingleClick())
+    // Connect to WiFi network
+    if (!wm.autoConnect(wm.getWiFiSSID().c_str(), wm.getWiFiPass().c_str()))
     {
-      // LED
-      for (int n = 0; n <= 10; n++)
-      {
-        heltec_led(n);
-        delay(5);
-      }
-      for (int n = 10; n >= 0; n--)
-      {
-        heltec_led(n);
-        delay(5);
-      }
-
-      Serial.println("Button pressed, starting AP mode...");
-      // Show AP mode on display
-      display.clear();
-      display.setFont(ArialMT_Plain_16);
-      display.drawStringf(4, 4, buffer, "%s_%s", WIFI_SSID, nodeId.c_str());
-      display.drawStringf(4, 24, buffer, "PASS: %s", WIFI_PASS);
-      display.drawStringf(4, 44, buffer, "IP: %s", "192.168.4.1");
-      display.display();
-
-      // Start the access point
-      wm.startConfigPortal((String(WIFI_SSID) + "_" + nodeId).c_str(), WIFI_PASS);
-      Serial.println("AP mode started");
-    }
-    delay(100);
-  }
-
-  if (WiFi.status() != WL_CONNECTED)
-  {
-    wm.setConnectTimeout(10); // Set timeout to 10 seconds
-    // if user didnt press the button, try to connect to the saved WiFi network
-    if (wm.autoConnect((String(WIFI_SSID) + "_" + nodeId).c_str(), WIFI_PASS))
-    {
-      display.clear();
-      display.drawString(0, 0, "  oo WIFI ON oo");
-      display.drawStringf(0, 16, buffer, "IP: %s", WiFi.localIP().toString().c_str());
-      display.display();
-      Serial.println("Connected to WiFi!");
-      Serial.println(WiFi.localIP());
-      connected = true;
-      delay(5000);
+      Serial.println("Failed to connect to WiFi. Starting AP mode...");
     }
     else
     {
-      display.clear();
-      display.drawString(4, 4, "  xx NO WIFI xx");
-      display.display();
-      connected = false;
-      delay(5000);
+      Serial.println("Connected to WiFi network.");
     }
   }
   else
   {
-    display.clear();
-    display.drawString(0, 0, "  oo WIFI ON oo");
-    display.drawStringf(0, 16, buffer, "IP: %s", WiFi.localIP().toString().c_str());
-    display.display();
-    Serial.println("Connected to WiFi!");
-    Serial.println(WiFi.localIP());
-    connected = true;
-    delay(5000);
+    Serial.println("No stored WiFi credentials found.");
   }
+
+  // Create a menu list
+  std::vector<const char *> menu = {"wifi", "exit"}; // You can add/remove these
+  wm.setMenu(menu);
+  wm.setTitle("");
+  wm.setConfigPortalBlocking(false); // Set to false to allow non-blocking mode
+  wm.setCustomHeadElement("<style>"
+                          "button{background-color:#ffcc00;color:white;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;}"
+                          ".custom-btn{padding:10px 20px;width:70%;background:#ffcc00;color:white;border:none;border-radius:5px;text-decoration:none;display:inline-block;margin:5px 0;}"
+                          "</style>"
+                          "<a href='http://192.168.4.1:8080/' class='custom-btn'>Dashboard</a>"
+                          "<a href='http://192.168.4.1:8080/raw' class='custom-btn'>Raw Data</a>"
+                          "<a href='http://192.168.4.1:8080/download' class='custom-btn'>Download Log</a>"
+                          "<a href='http://192.168.4.1:8080/wipe' class='custom-btn'>Wipe Log</a>");
+
+  // Start the access point
+  wm.startConfigPortal((String(WIFI_SSID) + "_" + nodeId).c_str());
+  Serial.println("AP mode started");
+  display.clear();
+  display.setFont(ArialMT_Plain_16);
+  display.drawStringf(4, 4, buffer, "%s_%s", WIFI_SSID, nodeId.c_str());
+  // display.drawStringf(4, 24, buffer, "PASS: %s", WIFI_PASS);
+  display.drawStringf(4, 44, buffer, "IP: %s", WiFi.softAPIP().toString().c_str());
+  display.display();
+  heltec_delay(5000);
 }
 
 void startHttpServer()
