@@ -4,9 +4,9 @@
 #include <heltec_unofficial.h>
 #include <SPIFFS.h>
 #include <WebServer.h>
-#include <WiFi.h>
+// #include <WiFi.h>
 #include <time.h>
-// #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
 // ###################### LORA - START ######################
 
@@ -66,6 +66,10 @@ int16_t receivedSensor6 = 0;
 #define WIFI_PASS "sunfactory"
 
 const char *filename = "/data.csv"; // File path in SPIFFS
+
+char buffer[64]; // Buffer to store formatted string
+
+WiFiManager wm;
 
 WebServer server(80); // Create a web server on port 80
 
@@ -139,7 +143,7 @@ void setup()
 
   // ###################################################
 
-  display.resetOrientation();
+  // display.resetOrientation();
 
   pinMode(BUZZER_PIN, OUTPUT); // Buzzer
 
@@ -177,15 +181,6 @@ void setup()
   display.printf("Vbat: %.2fV (%d%%)\n", vbat, heltec_battery_percent(vbat));
 
   yield();
-  char buffer[64]; // Buffer to store formatted string
-  display.clear();
-  display.setFont(ArialMT_Plain_16);
-  display.drawStringf(4, 4, buffer, "");
-  display.drawStringf(4, 4, buffer, WIFI_SSID);
-  display.drawStringf(4, 24, buffer, "");
-  display.drawStringf(4, 24, buffer, WIFI_PASS);
-  display.display();
-  heltec_delay(5000);
 
   connected = handleWifi();
 
@@ -200,8 +195,17 @@ void loop()
   heltec_loop();
   yield();
 
-  Serial.println("Looping with IP: ");
-  Serial.println(WiFi.localIP());
+  // Serial.print(WiFi.getMode());
+  // Serial.print(" ");
+  // Serial.print(WiFi.status());
+  // Serial.print(" ");
+  // Serial.print(WiFi.localIP());
+  // Serial.print(" ");
+  // Serial.print(WiFi.SSID());
+  // Serial.println(" ");
+
+  // Serial.println("Looping with IP: ");
+  // Serial.println(WiFi.localIP());
 
   if (!SPIFFS.exists(filename))
   {
@@ -418,9 +422,6 @@ void loop()
   }
   yield();
 
-  server.handleClient(); // Handle client requests
-  yield();
-
   // wipe file if memory is less than 10% to keep system running
   if (availablePercentage < 10)
   {
@@ -430,31 +431,70 @@ void loop()
 
   handleLoraRx();
 
-  heltec_delay(100);
+  server.handleClient(); // Handle client requests
+
+  heltec_delay(1000);
 }
 
 bool handleWifi()
 {
 
-  // WiFiManager wm;
-  // wm.setTimeout(30); // 30 secon
-  // wm.setAPStaticIPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
-  // // heltec_delay(3000);
+  WiFi.mode(WIFI_STA);
 
-  // // Try connecting to saved WiFi, or start AP for setup
-  // // if (!wm.autoConnect(WIFI_SSID, WIFI_PASS))
-  // if (!wm.autoConnect(REMOVED))
-  // {
-  //   ESP.restart();
-  // }
+  wm.setTimeout(120); // 2 minutes
 
-  // Serial.println("Connected to WiFi!");
-  // Serial.println(WiFi.localIP());
-  // display.drawStringf(4, 44, buffer, "IP: ");
-  // display.drawStringf(50, 44, buffer, WiFi.localIP().toString().c_str());
+  // Check if the user presses the button to skip WiFi connection
+  unsigned long startAttemptTime = millis();
 
-  // Connect to WiFi
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  display.clear();
+  display.setFont(ArialMT_Plain_16);
+  display.drawStringf(4, 4, buffer, "SSID: %s", WIFI_SSID);
+  display.drawStringf(4, 24, buffer, "PASS: %s", WIFI_PASS);
+  display.drawString(4, 44, "Press to Skip");
+  display.display();
+
+  while (millis() - startAttemptTime < WIFI_TIMEOUT_MS)
+  {
+    if (button.isSingleClick())
+    {
+      Serial.println("WiFi skipped by user.");
+      display.clear();
+      display.drawString(0, 0, "WiFi Skipped");
+      display.display();
+      delay(2000);
+      return false;
+    }
+    delay(100);
+  }
+
+  // Try connecting to saved WiFi, or start AP for setup
+  if (wm.autoConnect(WIFI_SSID, WIFI_PASS))
+  {
+    Serial.println("Connected to WiFi");
+    connected = true;
+  }
+  else
+  {
+    connected = false;
+    Serial.println("Failed to connect, starting AP");
+    // Start the access point
+    if (wm.startConfigPortal(WIFI_SSID, WIFI_PASS))
+    {
+      Serial.println("WiFi connected. Redirecting...");
+      server.sendHeader("Location", "/"); // Redirect to the root page
+      server.send(303);
+    }
+    else
+    {
+      Serial.println("Failed to connect via portal.");
+    }
+
+    display.setFont(ArialMT_Plain_16);
+    display.drawStringf(4, 4, buffer, WIFI_SSID);
+    display.drawStringf(4, 24, buffer, WIFI_PASS);
+    display.drawString(4, 44, "Press to Skip");
+    display.display();
+  }
 
   char buffer[64]; // Buffer to store formatted string
   display.clear();
@@ -462,7 +502,7 @@ bool handleWifi()
   display.drawString(0, 0, "WiFi Connecting...");
   display.display();
 
-  unsigned long startAttemptTime = millis();
+  startAttemptTime = millis();
 
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -487,33 +527,35 @@ bool handleWifi()
   Serial.println(WiFi.localIP());
   delay(5000);
 
-  // Start the server
-  server.on("/", HTTP_GET, handleRoot);             // Handle root request
-  server.on("/download", HTTP_GET, handleDownload); // Handle download request
-  server.on("/raw", HTTP_GET, handleGetValues);     // Handle getValues request
-  server.on("/wipe", HTTP_GET, handleWipeFile);     // Handle wipeFile request
-  server.on("/enable-beep", HTTP_GET, handleEnableBeep);
-  server.on("/disable-beep", HTTP_GET, handleDisableBeep);
-  yield();
-  server.begin();
+  if (connected)
+  {
+    // Start the server
+    server.on("/", HTTP_GET, handleRoot);             // Handle root request
+    server.on("/download", HTTP_GET, handleDownload); // Handle download request
+    server.on("/raw", HTTP_GET, handleGetValues);     // Handle getValues request
+    server.on("/wipe", HTTP_GET, handleWipeFile);     // Handle wipeFile request
+    server.on("/enable-beep", HTTP_GET, handleEnableBeep);
+    server.begin(80);
+    Serial.println("HTTP server started successfully.");
 
-  Serial.println("HTTP server started");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.println("MAC address: ");
-  Serial.println(WiFi.macAddress());
-  Serial.println("SSID: ");
-  Serial.println(WiFi.SSID());
-  Serial.println("Signal strength: ");
-  Serial.println(WiFi.RSSI());
-  Serial.println("Gateway: ");
-  Serial.println(WiFi.gatewayIP());
-  Serial.println("Subnet mask: ");
-  Serial.println(WiFi.subnetMask());
-  Serial.println("DNS: ");
-  Serial.println(WiFi.dnsIP());
-  Serial.println("Hostname: ");
-  Serial.println(WiFi.getHostname());
+    yield();
+    heltec_delay(1000);
+
+    Serial.println("HTTP server started");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+    Serial.println("MAC address: ");
+    Serial.println(WiFi.macAddress());
+    Serial.println("SSID: ");
+    Serial.println(WiFi.SSID());
+    Serial.println("Hostname: ");
+    Serial.println(WiFi.getHostname());
+  }
+  else
+  {
+    Serial.println("Server not initialized.");
+    delay(2000);
+  }
 
   // Initialize NTP
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
