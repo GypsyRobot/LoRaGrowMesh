@@ -57,7 +57,7 @@ int16_t receivedSensor6 = 0;
 
 // ####################### LORA - END ############################
 
-#define LOG_INTERVAL_MS 1000 // 60000 milliseconds = 1 minute
+#define LOG_INTERVAL_MS 60000 // 60000 milliseconds = 1 minute
 
 // For wifi connection
 #define WIFI_TIMEOUT_MS 10000 // 10000 milliseconds = 10 seconds
