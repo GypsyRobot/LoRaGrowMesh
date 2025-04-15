@@ -7,6 +7,7 @@
 // #include <WiFi.h>
 #include <time.h>
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+#include <HTTPClient.h>
 
 // ###################### LORA - START ######################
 
@@ -397,6 +398,8 @@ void loop()
       // Send data via Lora
       buildLoraPackage();
       handleLoraTx();
+      sendOwnDataToDatabase();
+      // Serial.println("Data written to file");
     }
     catch (const std::exception &e)
     {
@@ -695,12 +698,13 @@ void handleLoraRx()
 
     if (_radiolib_status == RADIOLIB_ERR_NONE && rxData.length())
     {
-      parseLoraPackage();
 
       // Filter out own packages sent via lora net
       bool ownPackage = receivedNodeId.equals(nodeId);
       if (!ownPackage)
       {
+        parseLoraPackage();
+        sendReceivedDataToDatabase();
         // Retransmit the received package
         both.printf("RX [%s]\n", rxData.c_str());
         txData = rxData;
@@ -786,4 +790,70 @@ void parseLoraPackage()
   receivedSensor4 = tokens[6].toInt();
   receivedSensor5 = tokens[7].toInt();
   receivedSensor6 = tokens[8].toInt();
+}
+
+void sendOwnDataToDatabase()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    HTTPClient http;
+    http.begin("http://192.168.0.5:30002/webhook/db");
+    http.addHeader("Content-Type", "application/json");
+
+    String json = "{";
+    json += "\"nodeId\":\"" + nodeId + "\",";
+    json += "\"msgId\":\"" + msgId + "\",";
+    json += "\"connected\":" + String(connected) + ",";
+    json += "\"sensor1\":" + String(sensor1) + ",";
+    json += "\"sensor2\":" + String(sensor2) + ",";
+    json += "\"sensor3\":" + String(sensor3) + ",";
+    json += "\"sensor4\":" + String(sensor4) + ",";
+    json += "\"sensor5\":" + String(sensor5) + ",";
+    json += "\"sensor6\":" + String(sensor6);
+    json += "}";
+
+    int code = http.POST(json);
+    Serial.print("HTTP Response code: ");
+    Serial.println(code);
+    Serial.println(http.getString());
+
+    http.end();
+  }
+  else
+  {
+    Serial.println("WiFi not connected.");
+  }
+}
+
+void sendReceivedDataToDatabase()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    HTTPClient http;
+    http.begin("http://192.168.0.5:30002/webhook/db");
+    http.addHeader("Content-Type", "application/json");
+
+    String json = "{";
+    json += "\"nodeId\":\"" + receivedNodeId + "\",";
+    json += "\"msgId\":\"" + receivedMsgId + "\",";
+    json += "\"connected\":" + String(receivedConnected) + ",";
+    json += "\"sensor1\":" + String(receivedSensor1) + ",";
+    json += "\"sensor2\":" + String(receivedSensor2) + ",";
+    json += "\"sensor3\":" + String(receivedSensor3) + ",";
+    json += "\"sensor4\":" + String(receivedSensor4) + ",";
+    json += "\"sensor5\":" + String(receivedSensor5) + ",";
+    json += "\"sensor6\":" + String(receivedSensor6);
+    json += "}";
+
+    int code = http.POST(json);
+    Serial.print("HTTP Response code: ");
+    Serial.println(code);
+    Serial.println(http.getString());
+
+    http.end();
+  }
+  else
+  {
+    Serial.println("WiFi not connected.");
+  }
 }
