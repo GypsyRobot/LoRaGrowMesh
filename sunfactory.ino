@@ -438,7 +438,7 @@ void loop()
     try
     {
       // Write data to file
-      file.printf("%s, %d, %d, %d, %d, %d\n", timestamp, (int)thermistorTemperatureA, (int)thermistorTemperatureB, (int)thermistorTemperatureC, (int)thermistorTemperatureD, (int)lux);
+      file.printf("%s,%s,%s,%d,%d, %d, %d, %d, %d, %d\n", timestamp, (String)nodeId, (String)msgId, (int)connected, (int)thermistorTemperatureA, (int)thermistorTemperatureB, (int)thermistorTemperatureC, (int)thermistorTemperatureD, (int)lux, (int)targetTemperature);
       fileSize = file.size();
       // Send data via Lora
       buildLoraPackage();
@@ -476,6 +476,8 @@ void loop()
   sensor5 = (int)lux;
 
   handleLoraRx();
+
+  connected = checkInternetConnection();
 
   heltec_delay(100);
 }
@@ -515,6 +517,7 @@ void handleWifi()
   else
   {
     Serial.println("No stored WiFi credentials found.");
+    connected = false;
   }
 
   // Create a menu list
@@ -903,4 +906,17 @@ void sendReceivedDataToDatabase()
   {
     Serial.println("WiFi not connected.");
   }
+}
+
+bool checkInternetConnection()
+{
+  WiFiClient client;
+  const char *host = "1.1.1.1"; // DNS IP (common to check for internet connectivity)
+
+  // Attempt to connect to the host (ping)
+  if (client.connect(host, 53))
+  { // DNS port 53
+    return true;
+  }
+  return false;
 }
