@@ -80,14 +80,18 @@ const long gmtOffset_sec = 0;     // Adjust this according to your timezone
 const int daylightOffset_sec = 0; // Adjust this according to your day light saving time
 
 // Constants for the Thermistors
-#define THERMISTOR_PIN_A 7          // Analog pin where the voltage divider is connected for Thermistor A
-#define THERMISTOR_PIN_B 6          // Analog pin where the voltage divider is connected for Thermistor B
-#define SERIES_RESISTOR 10000.0     // 10k resistor value (in ohms)
-#define NOMINAL_RESISTANCE 100000.0 // 100k thermistor at 25C
-#define NOMINAL_TEMPERATURE 25.0    // 25°C
-#define B_COEFFICIENT 3950.0        // Beta coefficient of thermistor
-#define SUPPLY_VOLTAGE 3.3          // ESP8266 supply voltage
-#define ADC_RESOLUTION 4095.0       // 12-bit ADC on ESP8266
+#define THERMISTOR_PIN_A 7 // Analog pin where the voltage divider is connected for Thermistor A
+#define THERMISTOR_PIN_B 6 // Analog pin where the voltage divider is connected for Thermistor B
+#define THERMISTOR_PIN_C 2 // Analog pin where the voltage divider is connected for Thermistor C
+#define THERMISTOR_PIN_D 3 // Analog pin where the voltage divider is connected for Thermistor D
+
+#define SERIES_RESISTOR 10000.0         // 10k resistor value (in ohms)
+#define NOMINAL_RESISTANCE_10 10000.0   // 100k thermistor at 25C
+#define NOMINAL_RESISTANCE_100 100000.0 // 100k thermistor at 25C
+#define NOMINAL_TEMPERATURE 25.0        // 25°C
+#define B_COEFFICIENT 3950.0            // Beta coefficient of thermistor
+#define SUPPLY_VOLTAGE 3.3              // ESP8266 supply voltage
+#define ADC_RESOLUTION 4095.0           // 12-bit ADC on ESP8266
 
 // Constants from the LDR datasheet
 #define LDR_PIN 5      // Analog pin where the voltage divider is connected for LDR
@@ -104,6 +108,8 @@ bool connected = false;
 
 float thermistorTemperatureA = 0;
 float thermistorTemperatureB = 0;
+float thermistorTemperatureC = 0;
+float thermistorTemperatureD = 0;
 float lux = 0;
 float fileSize = 0;
 int availableMemory = 99999;     // to make sure it's not 0
@@ -263,7 +269,7 @@ void loop()
   int adcValueA = analogRead(THERMISTOR_PIN_A);
   float voltageA = (adcValueA / ADC_RESOLUTION) * SUPPLY_VOLTAGE;
   float resistanceA = SERIES_RESISTOR * ((SUPPLY_VOLTAGE / voltageA) - 1);
-  thermistorTemperatureA = resistanceA / NOMINAL_RESISTANCE;      // (R/Ro)
+  thermistorTemperatureA = resistanceA / NOMINAL_RESISTANCE_100;  // (R/Ro)
   thermistorTemperatureA = log(thermistorTemperatureA);           // ln(R/Ro)
   thermistorTemperatureA /= B_COEFFICIENT;                        // 1/B * ln(R/Ro)
   thermistorTemperatureA += 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
@@ -274,12 +280,34 @@ void loop()
   int adcValueB = analogRead(THERMISTOR_PIN_B);
   float voltageB = (adcValueB / ADC_RESOLUTION) * SUPPLY_VOLTAGE;
   float resistanceB = SERIES_RESISTOR * ((SUPPLY_VOLTAGE / voltageB) - 1);
-  thermistorTemperatureB = resistanceB / NOMINAL_RESISTANCE;      // (R/Ro)
+  thermistorTemperatureB = resistanceB / NOMINAL_RESISTANCE_100;  // (R/Ro)
   thermistorTemperatureB = log(thermistorTemperatureB);           // ln(R/Ro)
   thermistorTemperatureB /= B_COEFFICIENT;                        // 1/B * ln(R/Ro)
   thermistorTemperatureB += 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
   thermistorTemperatureB = 1.0 / thermistorTemperatureB;          // Invert
   thermistorTemperatureB -= 273.15;
+
+  // Read and calculate temperature for Thermistor C
+  int adcValueC = analogRead(THERMISTOR_PIN_C);
+  float voltageC = (analogRead(THERMISTOR_PIN_C) / ADC_RESOLUTION) * SUPPLY_VOLTAGE;
+  float resistanceC = SERIES_RESISTOR * ((SUPPLY_VOLTAGE / voltageC) - 1);
+  thermistorTemperatureC = resistanceC / NOMINAL_RESISTANCE_10;   // (R/Ro)
+  thermistorTemperatureC = log(thermistorTemperatureC);           // ln(R/Ro)
+  thermistorTemperatureC /= B_COEFFICIENT;                        // 1/B * ln(R/Ro)
+  thermistorTemperatureC += 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
+  thermistorTemperatureC = 1.0 / thermistorTemperatureC;          // Invert
+  thermistorTemperatureC -= 273.15;
+
+  // Read and calculate temperature for Thermistor D
+  int adcValueD = analogRead(THERMISTOR_PIN_D);
+  float voltageD = (adcValueD / ADC_RESOLUTION) * SUPPLY_VOLTAGE;
+  float resistanceD = SERIES_RESISTOR * ((SUPPLY_VOLTAGE / voltageD) - 1);
+  thermistorTemperatureD = resistanceD / NOMINAL_RESISTANCE_10;   // (R/Ro)
+  thermistorTemperatureD = log(thermistorTemperatureD);           // ln(R/Ro)
+  thermistorTemperatureD /= B_COEFFICIENT;                        // 1/B * ln(R/Ro)
+  thermistorTemperatureD += 1.0 / (NOMINAL_TEMPERATURE + 273.15); // + (1/To)
+  thermistorTemperatureD = 1.0 / thermistorTemperatureD;          // Invert
+  thermistorTemperatureD -= 273.15;
 
   display.clear();
   char buffer[64]; // Buffer to store formatted string
@@ -287,34 +315,51 @@ void loop()
   // print layout structures
   display.drawHorizontalLine(0, 32, 128);
   display.drawVerticalLine(84, 0, 64);
-  display.drawRect(0, 0, 128, 64);
+  // display.drawRect(0, 0, 128, 64);
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_16);
   display.drawStringf(87, 7, buffer, "%.0fC", targetTemperature);
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_24);
+  display.setFont(ArialMT_Plain_16);
   if (thermistorTemperatureA < -100 || thermistorTemperatureA > 400)
   {
-    display.drawStringf(2, 4, buffer, "A:-------");
+    display.drawStringf(2, 0, buffer, "A:-------");
   }
   else
   {
-    display.drawStringf(2, 4, buffer, "A:%.0fC", thermistorTemperatureA);
+    display.drawStringf(2, 0, buffer, "A:%.0fC", thermistorTemperatureA);
   }
 
   yield();
-  // print temperature readings for sensor B
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_24);
+  display.setFont(ArialMT_Plain_16);
   if (thermistorTemperatureB < -100 || thermistorTemperatureB > 400)
   {
-    display.drawStringf(2, 34, buffer, "B:-------");
+    display.drawStringf(2, 16, buffer, "B:-------");
   }
   else
   {
-    display.drawStringf(2, 34, buffer, "B:%.0fC", thermistorTemperatureB);
+    display.drawStringf(2, 16, buffer, "B:%.0fC", thermistorTemperatureB);
+  }
+
+  if (thermistorTemperatureC < -100 || thermistorTemperatureC > 400)
+  {
+    display.drawStringf(2, 32, buffer, "C:-------");
+  }
+  else
+  {
+    display.drawStringf(2, 32, buffer, "C:%.0fC", thermistorTemperatureC);
+  }
+
+  if (thermistorTemperatureD < -100 || thermistorTemperatureD > 400)
+  {
+    display.drawStringf(2, 48, buffer, "D:-------");
+  }
+  else
+  {
+    display.drawStringf(2, 48, buffer, "D:%.0fC", thermistorTemperatureD);
   }
 
   // print OK if temperature above target temperature
@@ -393,7 +438,7 @@ void loop()
     try
     {
       // Write data to file
-      file.printf("%s, %d, %d, %d,\n", timestamp, (int)thermistorTemperatureA, (int)thermistorTemperatureB, (int)lux);
+      file.printf("%s, %d, %d, %d, %d, %d\n", timestamp, (int)thermistorTemperatureA, (int)thermistorTemperatureB, (int)thermistorTemperatureC, (int)thermistorTemperatureD, (int)lux);
       fileSize = file.size();
       // Send data via Lora
       buildLoraPackage();
@@ -426,7 +471,9 @@ void loop()
 
   sensor1 = (int)thermistorTemperatureA;
   sensor2 = (int)thermistorTemperatureB;
-  sensor3 = (int)lux;
+  sensor3 = (int)thermistorTemperatureC;
+  sensor4 = (int)thermistorTemperatureD;
+  sensor5 = (int)lux;
 
   handleLoraRx();
 
