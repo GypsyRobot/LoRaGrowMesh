@@ -4,6 +4,8 @@ LoraGrowMesh is an open-source LoRa-based mesh network for environmental monitor
 
 Originally built to measure temperature and light for a solar concentrator, it has evolved into a scalable system that collects and shares data from multiple sensors over long distances. With Wi-Fi hotspots, HTTP servers, and flash memory storage, it supports real-time data access and integration with databases like PostgreSQL for visualization with tools like Grafana.
 
+[![Support my work ❤️](https://img.shields.io/badge/Support%20my%20work%20❤️-orange?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/orobocigano)
+
 Learn more about the original solar application: [Sun Factory](https://hub.antenna.ch/sunfactoryproject)
 
 Based on the [heltec_esp32_lora_v3](https://github.com/ropg/heltec_esp32_lora_v3) library for Heltec ESP32 LoRa V3 boards.
